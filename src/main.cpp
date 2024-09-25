@@ -63,6 +63,7 @@ bool fCheckBlockIndex = false;
 unsigned int nCoinCacheSize = 5000;
 bool fAlerts = DEFAULT_ALERTS;
 
+unsigned int nStakeMinAge = 30 * 24 * 60 * 60; // 30 days
 int64_t nReserveBalance = 0;
 
 /** Fees smaller than this (in satoshi) are considered zero fee (for relaying and mining) */
@@ -556,6 +557,7 @@ CBlockIndex* FindForkInGlobalIndex(const CChain& chain, const CBlockLocator& loc
 
 CCoinsViewCache *pcoinsTip = NULL;
 CBlockTreeDB *pblocktree = NULL;
+
 //////////////////////////////////////////////////////////////////////////////
 //
 // mapOrphanTransactions
@@ -938,7 +940,7 @@ bool GetCoinAge(const CTransaction& tx, const unsigned int nTxTime, uint64_t& nC
         // Read block header
         CBlockHeader prevblock = pindex->GetBlockHeader();
 
-        if (prevblock.nTime + Params().STAKE_MIN_AGE() > nTxTime)
+        if (prevblock.nTime + nStakeMinAge > nTxTime)
             continue; // only count coins meeting min age requirement
 
         if (nTxTime < prevblock.nTime) {
@@ -979,11 +981,9 @@ bool CheckTransaction(const CTransaction& tx, CValidationState &state)
         if (txout.IsEmpty() && !tx.IsCoinBase() && !tx.IsCoinStake())
             return state.DoS(100, error("CheckTransaction(): txout empty for user transaction"));
 
-        if (txout.nValue < 0){
-            LogPrintf("txout.nValue = %s\n", FormatMoney(txout.nValue));
+        if (txout.nValue < 0)
             return state.DoS(100, error("CheckTransaction() : txout.nValue negative"),
                              REJECT_INVALID, "bad-txns-vout-negative");
-        }
         if (txout.nValue > MAX_MONEY)
             return state.DoS(100, error("CheckTransaction() : txout.nValue too high"),
                              REJECT_INVALID, "bad-txns-vout-toolarge");
@@ -1602,77 +1602,23 @@ CAmount GetProofOfStakeReward(const int nHeight, int64_t nCoinAge)
     return nSubsidy;
 }
 
-int GetLeadingPoSBlocks(int nHeight, CBlockIndex* pprev){
-    int countPoS = 0;
-
-	/*
-    CBlockIndex *pprevIndex = chainActive.Tip();
-
-    if(pprevIndex) {
-        LogPrintf("GetLeadingPoSBlocks: tip height: %d, nHeight: %d\n", pprevIndex->nHeight, nHeight);
-    }
-
-    if(pprevIndex&&nHeight-1<=pprevIndex->nHeight)
-    {
-        while(pprevIndex && pprevIndex->IsProofOfStake()){
-            countPoS++;
-            pprevIndex = pprevIndex->pprev;
-        }
-    }
-    */
-
-    while(pprev && pprev->IsProofOfStake()){
-        countPoS++;
-        pprev = pprev->pprev;
-    }
-
-    LogPrintf("GetLeadingPoSBlocks: countPoS: %d\n", countPoS);
-
-    return countPoS;
-}
-
-CAmount GetBlockValueAfterMasternodeStarted(int nHeight, CBlockIndex* pprev)
-{
-    //Anyways, we have to check
-    if( nHeight < Params().FirstMasternodePaymentBlock())
-        return 0;
-
-    CBlockIndex *pprevIndex = chainActive.Tip();
-    int countPoS = GetLeadingPoSBlocks(nHeight, pprev);
-
-    int nGap = nHeight - Params().FirstMasternodePaymentBlock();
-    int  nBaseHeight = nGap / Params().InflationCycleIntervalBlocks() * Params().InflationCycleIntervalBlocks() + Params().FirstMasternodePaymentBlock() - 1;
-    if( !pprevIndex || pprevIndex->nHeight < nBaseHeight )
-        return 0;
-
-    pprevIndex = chainActive[nBaseHeight];
-    CAmount nShouldSubsidy = (pprevIndex->nMoneySupply * 0.02 )/Params().InflationCycleIntervalBlocks()*(countPoS+1);
-    CAmount nSubsidy = nShouldSubsidy * 0.75; //Treasury 25% is subtracted from each block
-
-    return nSubsidy;
-}
-
-CAmount GetBlockValue(int nHeight, CBlockIndex* pprev)
+CAmount GetBlockValue(int nHeight)
 {
     if (nHeight == 0)
     {
         return nGenesisBlockRewardCoin;
     }
 
-    if( nHeight >= Params().FirstMasternodePaymentBlock() ){
-        return GetBlockValueAfterMasternodeStarted(nHeight, pprev);
-    }
-
-    if (Params().NetworkID() == CBaseChainParams::TESTNET ||
-        Params().NetworkID() == CBaseChainParams::REGTEST )
+    if (Params().NetworkID() == CBaseChainParams::TESTNET)
     {
-        if (nHeight == 1)
-            return 100000*COIN;
+        if (nHeight < 250)
+            return nBlockRewardStartCoin;
         else
             return nBlockRewardMinimumCoin;
     }
 
     CAmount nSubsidy = nBlockRewardStartCoin;
+
 
     // Subsidy is cut in half every 60480 blocks (21 days)
     nSubsidy >>= min((nHeight / Params().SubsidyHalvingInterval()), 63);
@@ -1698,8 +1644,8 @@ bool IsInitialBlockDownload()
         return false;
     if (!pindexBestHeader)
         return true;
-    bool state = chainActive.Height() < pindexBestHeader->nHeight - 24 * 6 ;
-         state |= pindexBestHeader->GetBlockTime() < GetTime() - chainParams.MaxTipAge();
+    bool state = (chainActive.Height() < pindexBestHeader->nHeight - 24 * 6 ||
+            pindexBestHeader->GetBlockTime() < GetTime() - chainParams.MaxTipAge());
     if (!state)
         lockIBDState = true;
     return state;
@@ -1887,7 +1833,7 @@ bool CheckInputs(const CTransaction& tx, CValidationState &state, const CCoinsVi
 
             // If prev is coinbase, check that it's matured
             if (coins->IsCoinBase() || coins->IsCoinStake()) {
-                if (nSpendHeight - coins->nHeight < Params().COINBASE_MATURITY())
+                if (nSpendHeight - coins->nHeight < COINBASE_MATURITY)
                     return state.Invalid(
                         error("CheckInputs() : tried to spend coinbase at depth %d, coinstake=%d", nSpendHeight - coins->nHeight, coins->IsCoinStake()),
                         REJECT_INVALID, "bad-txns-premature-spend-of-coinbase");
@@ -2244,54 +2190,26 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
         bool PayOk = true;
         if (block.IsProofOfWork())
         {
-            if(pindex->nHeight > 7200000 && block.vtx[0].vout.size() < 2)
-                return state.DoS(100,
-                    error("ConnectBlock() : coinbase output should be greater than 2"),
-                    REJECT_INVALID, "bad-co-count");
-
-            ExpectedPay = GetBlockValue(pindex->nHeight, pindex->pprev) + nFees;
-            if(block.IsTreasuryPaymentBlock(1)){
-                LogPrintf("Is Treasury Payment Block!\n");
-                int64_t treasuryPayAmount = GetTreasuryPayment(pindex->nHeight,(ExpectedPay-nFees)/0.75);
-                ExpectedPay += treasuryPayAmount;
-            }else{
-                LogPrintf("Non Treasury Payment Block!\n");
-            }
-
-            ActualPay = block.vtx[0].GetValueOut();
+            int64_t ExpectedPay = GetBlockValue(pindex->nHeight) + nFees;
+            int64_t ActualPay = block.vtx[0].GetValueOut();
             PayOk = ActualPay <= ExpectedPay;
-
         }
-
-        if (!PayOk){
+        if (!PayOk)
             return state.DoS(100,
-                error("ConnectBlock() :[1] reward pays too much (actual=%d vs Expected=%d)",
+                error("ConnectBlock() : reward pays too much (actual=%d vs limit=%d)",
                 ActualPay, ExpectedPay),
                 REJECT_INVALID, "bad-cb-amount");
-        }
     }
 
-     if (!IsInitialBlockDownload() && block.IsProofOfWork())
-     {
-         int64_t blockValue = GetBlockValue(pindex->nHeight, pindex->pprev);
-         int64_t mnPayAmount = GetMasternodePayment(pindex->nHeight, blockValue/0.75);
-         int64_t treasuryPayAmount = GetTreasuryPayment(pindex->nHeight,blockValue/0.75);
-         bool IsTreasury = block.IsTreasuryPaymentBlock(1);
-         int64_t ExpectedPay = blockValue + nFees ;
-         if(IsTreasury)
-                ExpectedPay += treasuryPayAmount ;
-         if(!IsBlockValueValid(block, ExpectedPay ))
-         {
-             return state.DoS(100,
-                 error("ConnectBlock() :[2] reward pays too much (actual=%d vs limit=%d)",
-                     block.vtx[0].GetValueOut(), GetBlockValue(pindex->nHeight, pindex->pprev) + nFees),
-                 REJECT_INVALID, "bad-cb-amount");
-         }
-     }
+    // if (!IsInitialBlockDownload() && !IsBlockValueValid(block, GetBlockValue(pindex->nHeight) + nFees + GetMasternodePayment(pindex->nHeight, GetBlockValue(pindex->nHeight)))) {
+    //     return state.DoS(100,
+    //         error("ConnectBlock() : reward pays too much (actual=%d vs limit=%d)",
+    //             block.vtx[0].GetValueOut(), GetBlockValue(pindex->nHeight) + nFees),
+    //         REJECT_INVALID, "bad-cb-amount");
+    // }
 
-    if (!control.Wait()){
+    if (!control.Wait())
         return state.DoS(100, false);
-    }
     int64_t nTime2 = GetTimeMicros(); nTimeVerify += nTime2 - nTimeStart;
     LogPrint("bench", "    - Verify %u txins: %.2fms (%.3fms/txin) [%.2fs]\n", nInputs - 1, 0.001 * (nTime2 - nTimeStart), nInputs <= 1 ? 0 : 0.001 * (nTime2 - nTimeStart) / (nInputs-1), nTimeVerify * 0.000001);
 
@@ -2661,59 +2579,13 @@ int64_t GetMasternodePayment(int nHeight, int64_t blockValue, int nMasternodeCou
 {
     /*
      * Masternode code
-     */
+     *
     if (nHeight < Params().FirstMasternodePaymentBlock())
         return 0;
 
     return blockValue / 2;
-}
-
-CBlockIndex* GetPrevTreasuryBlock(){
-
-    CBlockIndex *pprevIndex = chainActive.Tip();
-
-    while(pprevIndex){
-        if(pprevIndex->IsTreasuryBlock())
-            return pprevIndex;
-        pprevIndex = pprevIndex->pprev;
-    }
-    return NULL;
-}
-
-bool IsTreasuryPaymentBlock(int nHeight){
-
-    if( nHeight < Params().FirstMasternodePaymentBlock() )
-        return false;
-
-    // 0.10.7.5 begin
-    //bool isTreasuryBlock =  !((nHeight - Params().FirstMasternodePaymentBlock()) % Params().TreasuryPaymentIntervalBlocks());
-    bool isTreasuryBlock = false;
-	// 0.10.7.5 end
-
-    if(!isTreasuryBlock){
-        CBlockIndex *pIndex = GetPrevTreasuryBlock();
-        int lastTreasuryBlock = 0;
-        if(pIndex)
-            lastTreasuryBlock = pIndex->nHeight;
-
-        if(nHeight-lastTreasuryBlock>=Params().TreasuryPaymentIntervalBlocks())
-            isTreasuryBlock = true;
-    }
-    return isTreasuryBlock;
-}
-
-int64_t GetTreasuryPayment(int nHeight, int64_t blockValue)
-{
-    /*
-     * Treasury code
      */
-    if (nHeight < Params().FirstMasternodePaymentBlock())
-        return 0;
-
-    if(!IsTreasuryPaymentBlock(nHeight))
-        return 0;
-
-    return blockValue / 4 * Params().TreasuryPaymentIntervalBlocks();
+    return 0;
 }
 
 /**
@@ -2765,8 +2637,7 @@ static void PruneBlockIndexCandidates() {
     // Note that we can't delete the current block itself, as we may need to return to it later in case a
     // reorganization to a better block fails.
     std::set<CBlockIndex*, CBlockIndexWorkComparator>::iterator it = setBlockIndexCandidates.begin();
-    while (it != setBlockIndexCandidates.end() &&
-           setBlockIndexCandidates.value_comp()(*it, chainActive.Tip())) {
+    while (it != setBlockIndexCandidates.end() && setBlockIndexCandidates.value_comp()(*it, chainActive.Tip())) {
         setBlockIndexCandidates.erase(it++);
     }
     // Either the current tip or a successor of it we're working towards is left in setBlockIndexCandidates.
@@ -2971,7 +2842,7 @@ CBlockIndex* AddToBlockIndex(const CBlockHeader& block)
         return it->second;
 
     // Construct new block index object
-    CBlockIndex* pindexNew = new CBlockIndex(block,0);
+    CBlockIndex* pindexNew = new CBlockIndex(block);
     assert(pindexNew);
     // We assign the sequence id to blocks only when the full data is available,
     // to avoid miners withholding blocks but broadcasting headers, to get a
@@ -3037,11 +2908,6 @@ bool ReceivedBlockTransactions(const CBlock &block, CValidationState& state, CBl
 {
     if (block.IsProofOfStake())
         pindexNew->SetProofOfStake();
-    if (block.IsTreasuryPaymentBlock(2))
-    {
-        pindexNew->SetTreasuryPayment();
-    }
-
     pindexNew->nTx = block.vtx.size();
     pindexNew->nChainTx = 0;
     pindexNew->nFile = pos.nFile;
@@ -3182,6 +3048,7 @@ bool CheckBlockHeader(const CBlockHeader& block, CValidationState& state, bool f
 bool CheckBlock(const CBlock& block, CValidationState& state, bool fCheckPOW, bool fCheckMerkleRoot)
 {
     // These are checks that are independent of context.
+
     // Check that the header is valid (particularly PoW).  This is mostly
     // redundant with the call in AcceptBlockHeader.
     if (!CheckBlockHeader(block, state, fCheckPOW && block.IsProofOfWork()))
@@ -3206,6 +3073,7 @@ bool CheckBlock(const CBlock& block, CValidationState& state, bool fCheckPOW, bo
     // All potential-corruption validation must be done before we do any
     // transaction validation, as otherwise we may mark the header as invalid
     // because we receive the wrong transactions for it.
+
     // Size limits
     if (block.vtx.empty() || block.vtx.size() > MAX_BLOCK_SIZE || ::GetSerializeSize(block, SER_NETWORK, PROTOCOL_VERSION) > MAX_BLOCK_SIZE)
         return state.DoS(100, error("CheckBlock() : size limits failed"),
@@ -3215,7 +3083,6 @@ bool CheckBlock(const CBlock& block, CValidationState& state, bool fCheckPOW, bo
     if (block.vtx.empty() || !block.vtx[0].IsCoinBase())
         return state.DoS(100, error("CheckBlock() : first tx is not coinbase"),
                          REJECT_INVALID, "bad-cb-missing");
-
     for (unsigned int i = 1; i < block.vtx.size(); i++)
         if (block.vtx[i].IsCoinBase())
             return state.DoS(100, error("CheckBlock() : more than one coinbase"),
@@ -3250,7 +3117,7 @@ bool CheckBlock(const CBlock& block, CValidationState& state, bool fCheckPOW, bo
 
     // ----------- swiftTX transaction scanning -----------
 
-    //if (IsSporkActive(SPORK_3_SWIFTTX_BLOCK_FILTERING)) {
+    if (IsSporkActive(SPORK_3_SWIFTTX_BLOCK_FILTERING)) {
         BOOST_FOREACH (const CTransaction& tx, block.vtx) {
             if (!tx.IsCoinBase()) {
                 //only reject blocks when it's based on complete consensus
@@ -3266,9 +3133,9 @@ bool CheckBlock(const CBlock& block, CValidationState& state, bool fCheckPOW, bo
                 }
             }
         }
-    //} else {
-    //    LogPrintf("CheckBlock() : skipping transaction locking checks\n");
-    //}
+    } else {
+        LogPrintf("CheckBlock() : skipping transaction locking checks\n");
+    }
 
     // ----------- masternode payments / budgets -----------
 
@@ -3283,25 +3150,11 @@ bool CheckBlock(const CBlock& block, CValidationState& state, bool fCheckPOW, bo
                 nHeight = (*mi).second->nHeight + 1;
         }
 
-        if (nHeight != 0 && !IsInitialBlockDownload() && !block.IsProofOfStake()) {
-			// v0.10.7.7 - begin
-			int diffSec = GetAdjustedTime() - block.nTime;
-			if (diffSec < 600) {
-	            if (!IsBlockPayeeValid(block, nHeight)) {
-	                mapRejectedBlocks.insert(make_pair(block.GetHash(), GetTime()));
-	                return state.DoS(100, error("CheckBlock() : Couldn't find masternode/budget payment"));
-	            }
-			} else {
-				LogPrintf("CheckBlock(): diffSec >= 600 - skipping IsBlockPayeeValid()\n");
-			}
-			// v0.10.7.7 - end
-
-            /*
-			if (!IsBlockPayeeValid(block, nHeight)) {
+        if (nHeight != 0 && !IsInitialBlockDownload()) {
+            if (!IsBlockPayeeValid(block, nHeight)) {
                 mapRejectedBlocks.insert(make_pair(block.GetHash(), GetTime()));
                 return state.DoS(100, error("CheckBlock() : Couldn't find masternode/budget payment"));
             }
-            */
         } else {
             if (fDebug)
                 LogPrintf("CheckBlock(): Masternode payment check skipped on sync - skipping IsBlockPayeeValid()\n");
@@ -3436,29 +3289,12 @@ bool AcceptBlock(CBlock& block, CValidationState& state, CBlockIndex** ppindex, 
         return state.DoS(100, error("%s : incorrect proof of work", __func__),
                          REJECT_INVALID, "bad-diffbits");
 
-    // Check proof of stake
+    // Check proof of work
     if (block.IsProofOfStake() &&
        (block.nBits != GetNextPoSTargetRequired(pindex->pprev)))
         return state.DoS(100, error("%s : incorrect proof of stake", __func__),
                          REJECT_INVALID, "bad-pos-diffbits");
 
-    // Check Treasury playment
-    if (block.IsTreasuryPaymentBlock(3) )
-    {
-       bool bstate = pindex->nHeight < Params().FirstMasternodePaymentBlock();
-       if(!bstate){
-           int prevtreasuryHeight = 0;
-           CBlockIndex *pprevTreasuryBlock = GetPrevTreasuryBlock();
-           if(pprevTreasuryBlock)
-               prevtreasuryHeight = pprevTreasuryBlock->nHeight;
-           if( prevtreasuryHeight + Params().TreasuryPaymentIntervalBlocks() > pindex->nHeight )
-               bstate = true;
-       }
-
-       if(bstate)
-           return state.DoS(100, error("%s : incorrect treasury payment block", __func__),
-                         REJECT_INVALID, "bad-pay-treasury");
-    }
 
     if (pindex->nStatus & BLOCK_HAVE_DATA) {
         // TODO: deal better with duplicate blocks.
@@ -3631,28 +3467,19 @@ bool TestBlockValidity(CValidationState &state, const CBlock& block, CBlockIndex
     assert(pindexPrev == chainActive.Tip());
 
     CCoinsViewCache viewNew(pcoinsTip);
-    CBlockIndex indexDummy(block,2);
+    CBlockIndex indexDummy(block);
     indexDummy.pprev = pindexPrev;
     indexDummy.nHeight = pindexPrev->nHeight + 1;
 
     // NOTE: CheckBlockHeader is called by CheckBlock
-
-    if (!ContextualCheckBlockHeader(block, state, pindexPrev)){
+    if (!ContextualCheckBlockHeader(block, state, pindexPrev))
         return false;
-    }
-
-    if (!CheckBlock(block, state, fCheckPOW, fCheckMerkleRoot)){
+    if (!CheckBlock(block, state, fCheckPOW, fCheckMerkleRoot))
         return false;
-    }
-
-    if (!ContextualCheckBlock(block, state, pindexPrev)){
+    if (!ContextualCheckBlock(block, state, pindexPrev))
         return false;
-    }
-
-    if (!ConnectBlock(block, state, &indexDummy, viewNew, true)){
+    if (!ConnectBlock(block, state, &indexDummy, viewNew, true))
         return false;
-    }
-
     assert(state.IsValid());
 
     return true;
@@ -3787,9 +3614,6 @@ bool static LoadBlockIndexDB()
             pindex->BuildSkip();
         if (pindex->IsValid(BLOCK_VALID_TREE) && (pindexBestHeader == NULL || CBlockIndexWorkComparator()(pindexBestHeader, pindex)))
             pindexBestHeader = pindex;
-
-        //if(pindex->nHeight>=7069999)
-        //    break;
     }
 
     // Load block file info
@@ -3948,8 +3772,7 @@ void UnloadBlockIndex()
     pindexBestInvalid = NULL;
 }
 
-bool
-LoadBlockIndex()
+bool LoadBlockIndex()
 {
     // Load block index from databases
     if (!fReindex && !LoadBlockIndexDB())
@@ -4616,10 +4439,10 @@ void static ProcessGetData(CNode* pfrom)
 
 int ActiveProtocol()
 {
-    //if (IsSporkActive(SPORK_14_NEW_PROTOCOL_ENFORCEMENT)) {
-    //    if (chainActive.Tip()->nHeight >= Params().ModifierUpgradeBlock())
-    //        return MIN_PEER_PROTO_VERSION_AFTER_ENFORCEMENT;
-    //}
+    if (IsSporkActive(SPORK_14_NEW_PROTOCOL_ENFORCEMENT)) {
+        if (chainActive.Tip()->nHeight >= Params().ModifierUpgradeBlock())
+            return MIN_PEER_PROTO_VERSION_AFTER_ENFORCEMENT;
+    }
 
     return MIN_PEER_PROTO_VERSION_BEFORE_ENFORCEMENT;
 }
@@ -4633,6 +4456,9 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         LogPrintf("dropmessagestest DROPPING RECV MESSAGE\n");
         return true;
     }
+
+
+
 
     if (strCommand == "version")
     {
@@ -5462,15 +5288,11 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
     else
     {
-        //probably one the extensions
-        //obfuScationPool.ProcessMessageObfuscation(pfrom, strCommand, vRecv);
-        mnodeman.ProcessMessage(pfrom, strCommand, vRecv);
-        budget.ProcessMessage(pfrom, strCommand, vRecv);
-        masternodePayments.ProcessMessageMasternodePayments(pfrom, strCommand, vRecv);
-        ProcessMessageSwiftTX(pfrom, strCommand, vRecv);
-        ProcessSpork(pfrom, strCommand, vRecv);
-        masternodeSync.ProcessMessage(pfrom, strCommand, vRecv);
+        // Ignore unknown commands for extensibility
+        LogPrint("net", "Unknown command \"%s\" from peer=%d\n", SanitizeString(strCommand), pfrom->id);
     }
+
+
 
     return true;
 }

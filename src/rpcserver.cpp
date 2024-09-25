@@ -308,15 +308,15 @@ static const CRPCCommand vRPCCommands[] =
     { "hidden",             "setmocktime",            &setmocktime,            true,      false,      false },
 
     /* Masternode features */
-
+    /*
     {"masternode", "masternode", &masternode, true, true, false},
     {"masternode", "masternodelist", &masternodelist, true, true, false},
-    //{"masternode", "mnbudget", &mnbudget, true, true, false},
-    //{"masternode", "mnbudgetvoteraw", &mnbudgetvoteraw, true, true, false},
-    //{"masternode", "mnfinalbudget", &mnfinalbudget, true, true, false},
+    {"masternode", "mnbudget", &mnbudget, true, true, false},
+    {"masternode", "mnbudgetvoteraw", &mnbudgetvoteraw, true, true, false},
+    {"masternode", "mnfinalbudget", &mnfinalbudget, true, true, false},
     {"masternode", "mnsync", &mnsync, true, true, false},
-    //{"masternode", "spork", &spork, true, true, false},
-
+    {"masternode", "spork", &spork, true, true, false},
+    */
 #ifdef ENABLE_WALLET
     //{"masternode", "obfuscation", &obfuscation, false, false, true}, /* not threadSafe because of SendMoney */
 
@@ -1040,7 +1040,7 @@ std::string HelpExampleCli(string methodname, string args){
 
 std::string HelpExampleRpc(string methodname, string args){
     return "> curl --user myusername --data-binary '{\"jsonrpc\": \"1.0\", \"id\":\"curltest\", "
-        "\"method\": \"" + methodname + "\", \"params\": [" + args + "] }' -H 'content-type: text/plain;' http://127.0.0.1:8332/\n";
+        "\"method\": \"" + methodname + "\", \"params\": [" + args + "] }' -H 'content-type: text/plain;' http://127.0.0.1:14820/\n";
 }
 
 const CRPCTable tableRPC;

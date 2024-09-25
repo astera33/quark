@@ -204,9 +204,7 @@ bool CBlockTreeDB::LoadBlockIndexGuts()
     pcursor->Seek(ssKeySet.str());
 
     // Load mapBlockIndex
-    int countRecord = 0;
     while (pcursor->Valid()) {
-        countRecord ++;
         boost::this_thread::interruption_point();
         try {
             leveldb::Slice slKey = pcursor->key();
@@ -254,7 +252,6 @@ bool CBlockTreeDB::LoadBlockIndexGuts()
 
                 pcursor->Next();
             } else {
-
                 break; // if shutdown requested or finished loading block index
             }
         } catch (std::exception &e) {

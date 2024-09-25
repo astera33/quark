@@ -160,19 +160,19 @@ public:
 Value spork(const Array& params, bool fHelp)
 {
     if (params.size() == 1 && params[0].get_str() == "show") {
-        Object obj;
+        Object ret;
         for (int nSporkID = SPORK_START; nSporkID <= SPORK_END; nSporkID++) {
             if (sporkManager.GetSporkNameByID(nSporkID) != "Unknown")
-                obj.push_back(Pair(sporkManager.GetSporkNameByID(nSporkID), GetSporkValue(nSporkID)));
+                ret.push_back(Pair(sporkManager.GetSporkNameByID(nSporkID), GetSporkValue(nSporkID)));
         }
-        return obj;
+        return ret;
     } else if (params.size() == 1 && params[0].get_str() == "active") {
-        Object obj;
+        Object ret;
         for (int nSporkID = SPORK_START; nSporkID <= SPORK_END; nSporkID++) {
             if (sporkManager.GetSporkNameByID(nSporkID) != "Unknown")
-                obj.push_back(Pair(sporkManager.GetSporkNameByID(nSporkID), IsSporkActive(nSporkID)));
+                ret.push_back(Pair(sporkManager.GetSporkNameByID(nSporkID), IsSporkActive(nSporkID)));
         }
-        return obj;
+        return ret;
     } else if (params.size() == 2) {
         int nSporkID = sporkManager.GetSporkIDByName(params[0].get_str());
         if (nSporkID == -1) {
@@ -180,10 +180,11 @@ Value spork(const Array& params, bool fHelp)
         }
 
         // SPORK VALUE
-        int64_t nValue = params[1].get_int64();
+        int64_t nValue = params[1].get_int();
 
         //broadcast new spork
         if (sporkManager.UpdateSpork(nSporkID, nValue)) {
+            ExecuteSpork(nSporkID, nValue);
             return "success";
         } else {
             return "failure";
@@ -191,31 +192,10 @@ Value spork(const Array& params, bool fHelp)
     }
 
     throw runtime_error(
-        "spork \"name\" ( value )\n"
-        "\nReturn spork values or their active state.\n"
-
-        "\nArguments:\n"
-        "1. \"name\"        (string, required)  \"show\" to show values, \"active\" to show active state.\n"
-        "                       When set up as a spork signer, the name of the spork can be used to update it's value.\n"
-        "2. value           (numeric, required when updating a spork) The new value for the spork.\n"
-
-        "\nResult (show):\n"
-        "{\n"
-        "  \"spork_name\": nnn      (key/value) Key is the spork name, value is it's current value.\n"
-        "  ,...\n"
-        "}\n"
-
-        "\nResult (active):\n"
-        "{\n"
-        "  \"spork_name\": true|false      (key/value) Key is the spork name, value is a boolean for it's active state.\n"
-        "  ,...\n"
-        "}\n"
-
-        "\nResult (name):\n"
-        " \"success|failure\"       (string) Wither or not the update succeeded.\n"
-
-        "\nExamples:\n" +
-        HelpExampleCli("spork", "show") + HelpExampleRpc("spork", "show"));
+        "spork <name> [<value>]\n"
+        "<name> is the corresponding spork name, or 'show' to show all current spork settings, active to show which sporks are active"
+        "<value> is a epoch datetime to enable or disable spork" +
+        HelpRequiringPassphrase());
 }
 
 Value mnsync(const Array& params, bool fHelp)
@@ -233,17 +213,17 @@ Value mnsync(const Array& params, bool fHelp)
         obj.push_back(Pair("IsBlockchainSynced", masternodeSync.IsBlockchainSynced()));
         obj.push_back(Pair("lastMasternodeList", masternodeSync.lastMasternodeList));
         obj.push_back(Pair("lastMasternodeWinner", masternodeSync.lastMasternodeWinner));
-        //obj.push_back(Pair("lastBudgetItem", masternodeSync.lastBudgetItem));
+        obj.push_back(Pair("lastBudgetItem", masternodeSync.lastBudgetItem));
         obj.push_back(Pair("lastFailure", masternodeSync.lastFailure));
         obj.push_back(Pair("nCountFailures", masternodeSync.nCountFailures));
         obj.push_back(Pair("sumMasternodeList", masternodeSync.sumMasternodeList));
         obj.push_back(Pair("sumMasternodeWinner", masternodeSync.sumMasternodeWinner));
-        //obj.push_back(Pair("sumBudgetItemProp", masternodeSync.sumBudgetItemProp));
-        //obj.push_back(Pair("sumBudgetItemFin", masternodeSync.sumBudgetItemFin));
+        obj.push_back(Pair("sumBudgetItemProp", masternodeSync.sumBudgetItemProp));
+        obj.push_back(Pair("sumBudgetItemFin", masternodeSync.sumBudgetItemFin));
         obj.push_back(Pair("countMasternodeList", masternodeSync.countMasternodeList));
         obj.push_back(Pair("countMasternodeWinner", masternodeSync.countMasternodeWinner));
-        //obj.push_back(Pair("countBudgetItemProp", masternodeSync.countBudgetItemProp));
-        //obj.push_back(Pair("countBudgetItemFin", masternodeSync.countBudgetItemFin));
+        obj.push_back(Pair("countBudgetItemProp", masternodeSync.countBudgetItemProp));
+        obj.push_back(Pair("countBudgetItemFin", masternodeSync.countBudgetItemFin));
         obj.push_back(Pair("RequestedMasternodeAssets", masternodeSync.RequestedMasternodeAssets));
         obj.push_back(Pair("RequestedMasternodeAttempt", masternodeSync.RequestedMasternodeAttempt));
 

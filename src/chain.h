@@ -10,7 +10,6 @@
 #include "pow.h"
 #include "tinyformat.h"
 #include "uint256.h"
-#include "util.h"
 
 #include <vector>
 
@@ -143,7 +142,6 @@ public:
         BLOCK_PROOF_OF_STAKE = (1 << 0), // is proof-of-stake block
         BLOCK_STAKE_ENTROPY = (1 << 1),  // entropy bit for stake modifier
         BLOCK_STAKE_MODIFIER = (1 << 2), // regenerated stake modifier
-        BLOCK_TREASURY_PAYMENT = (1 << 3 ), // is treasury payment block
     };
 
     // proof-of-stake specific fields
@@ -201,7 +199,7 @@ public:
         SetNull();
     }
 
-    CBlockIndex(const CBlock& block,int key)
+    CBlockIndex(const CBlock& block)
     {
         SetNull();
 
@@ -225,10 +223,6 @@ public:
             prevoutStake = block.vtx[1].vin[0].prevout;
             nStakeTime = block.nTime;
         } else {
-            if(block.IsTreasuryPaymentBlock(0))
-                SetTreasuryPayment();
-
-            //LogPrintf("RUN-KEY-0010, KEY==========> %d\n",key);
             prevoutStake.SetNull();
             nStakeTime = 0;
         }
@@ -291,17 +285,7 @@ public:
         return pbegin[(pend - pbegin)*2/3];
     }
 
-    bool IsTreasuryBlock() const
-    {
-        return (nFlags & BLOCK_TREASURY_PAYMENT );
-    }
-
-    void SetTreasuryPayment()
-    {
-        nFlags |= BLOCK_TREASURY_PAYMENT;
-    }
-
-    bool IsProofOfWork() const
+        bool IsProofOfWork() const
     {
         return !(nFlags & BLOCK_PROOF_OF_STAKE);
     }
