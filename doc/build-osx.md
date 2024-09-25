@@ -67,7 +67,7 @@ After exiting, you'll get a warning that the install is keg-only, which means it
 
 1. Clone the GitHub tree to get the source code and go into the directory.
 
-        git clone https://github.com/quark-project/quark.git
+        git clone https://github.com/quark-project-evolution/quark.git
         cd quark
 
 2.  Build quarkd:

@@ -46,7 +46,7 @@ The following are developer notes on how to build Quark on your native platform.
 
 Development
 ---------------------
-The Quark repo's [root README](https://github.com/quark-project/quarkcoin/blob/master/README.md) contains relevant information on the development process and automated testing.
+The Quark repo's [root README](https://github.com/quark-project-evolution/quark/blob/master/README.md) contains relevant information on the development process and automated testing.
 
 - [Coding Guidelines](coding.md)
 - [Multiwallet Qt Development](multiwallet-qt.md)
