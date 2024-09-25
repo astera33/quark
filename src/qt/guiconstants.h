@@ -45,7 +45,7 @@ static const int MAX_URI_LENGTH = 255;
 #define SPINNER_FRAMES 35
 
 #define QAPP_ORG_NAME "Quark"
-#define QAPP_ORG_DOMAIN "qrknet.info"
+#define QAPP_ORG_DOMAIN "quarkcoin.info"
 #define QAPP_APP_NAME_DEFAULT "Quark-Qt"
 #define QAPP_APP_NAME_TESTNET "Quark-Qt-testnet"
 

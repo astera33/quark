@@ -3,7 +3,7 @@ Quark Core integration/staging tree
 
 [![Build Status](https://travis-ci.org/quark/quark.svg?branch=master)](https://travis-ci.org/quark/quark)
 
-https://www.qrknet.info
+https://www.quarkcoin.info
 
 What is Quark?
 --------------
@@ -15,7 +15,7 @@ out collectively by the network. Quark Core is the name of open source
 software which enables the use of this currency.
 
 For more information, as well as an immediately useable, binary version of
-the Quark Core software, see https://www.qrknet.info/.
+the Quark Core software, see https://www.quarkcoin.info/.
 
 License
 -------
