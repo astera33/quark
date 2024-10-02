@@ -235,10 +235,6 @@ void BitcoinGUI::createActions(const NetworkStyle *networkStyle)
 {
     QActionGroup *tabGroup = new QActionGroup(this);
 
-    mining =new QCheckBox(tr("mining mode"),this);
-    mining->setCheckState((Qt::CheckState)(2*GetBoolArg("-stake", false)));
-    mining->setEnabled(false);
-    connect(mining,SIGNAL(stateChanged(int)),this,SLOT(MiningModeChanged(int)));
     overviewAction = new QAction(QIcon(":/icons/overview"), tr("&Overview"), this);
     overviewAction->setStatusTip(tr("Show general overview of wallet"));
     overviewAction->setToolTip(overviewAction->statusTip());
@@ -403,7 +399,6 @@ void BitcoinGUI::createToolBars()
     {
         QToolBar *toolbar = addToolBar(tr("Tabs toolbar"));
         toolbar->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
-        toolbar->addWidget(mining);
         toolbar->addAction(overviewAction);
         toolbar->addAction(sendCoinsAction);
         toolbar->addAction(receiveCoinsAction);
@@ -589,9 +584,6 @@ void BitcoinGUI::showHelpMessageClicked()
 }
 
 #ifdef ENABLE_WALLET
-void BitcoinGUI::MiningModeChanged(int mode){
-    SoftSetArg("-stake",(mode==Qt::Checked)?"1":"0");
-}
 void BitcoinGUI::openClicked()
 {
     OpenURIDialog dlg(this);
