@@ -195,9 +195,9 @@ public:
         hashGenesisBlock = genesis.GetHash();
         assert(hashGenesisBlock == hashMainGenesisBlock);
 
-        vSeeds.push_back(CDNSSeedData("seed1.quarkcoin.info", "seed1.quarkcoin.info"));
-        vSeeds.push_back(CDNSSeedData("seed2.quarkcoin.info", "seed2.quarkcoin.info"));
-        vSeeds.push_back(CDNSSeedData("seed3.quarkcoin.info", "seed3.quarkcoin.info"));
+        vSeeds.push_back(CDNSSeedData("seed1.ddns.net", "seed1.ddns.net"));
+        vSeeds.push_back(CDNSSeedData("seed2.ddns.net", "seed2.ddns.net"));
+        vSeeds.push_back(CDNSSeedData("seed3.ddns.net", "seed3.ddns.net"));
 
 
         base58Prefixes[PUBKEY_ADDRESS] = std::vector<unsigned char>(1, 58);
@@ -263,7 +263,7 @@ public:
 
         vFixedSeeds.clear();
         vSeeds.clear();
-        vSeeds.push_back(CDNSSeedData("testseed1.quarkcoin.info", "testseed1.quarkcoin.info"));
+        vSeeds.push_back(CDNSSeedData("testseed1.ddns.net", "testseed1.ddns.net"));
 
         base58Prefixes[PUBKEY_ADDRESS] = std::vector<unsigned char>(1, 119);
         base58Prefixes[SCRIPT_ADDRESS] = std::vector<unsigned char>(1, 199);
