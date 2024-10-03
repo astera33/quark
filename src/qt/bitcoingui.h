@@ -169,7 +169,6 @@ public slots:
 private slots:
 
 #ifdef ENABLE_WALLET
-    void MiningModeChanged(int);
     /** Switch to overview (home) page */
     void gotoOverviewPage();
     /** Switch to history (transactions) page */
